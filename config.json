@@ -1,0 +1,13 @@
+{
+  "ip": "",
+  "delay": 3,
+  "retry_limit": 3,
+  "refresh_time": 1,
+  "sampling_rate": "",
+  "correction": {
+    "auto_correction": true,
+    "x": 0.00,
+    "y": 0.00,
+    "z": 0.00
+  }
+}
