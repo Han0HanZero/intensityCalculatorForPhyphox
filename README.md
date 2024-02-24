@@ -1,12 +1,8 @@
 # phyphoxAccelerationAnalyser
 
-phypboxAccelerationAnalyser v2.0.0
-
-by HanZero
+源代码以MIT协议分发。
 
 ---
-
-源代码以MIT协议分发。
 
 使用Python版本：3.11.1
 
@@ -15,6 +11,8 @@ by HanZero
 - matplotlib - 3.8.2
 - numpy - 1.26.4
 - requests - 2.31.0
+
+---
 
 滤波算法：
 
