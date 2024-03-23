@@ -10,6 +10,12 @@ refresh_time（默认：1）：获取实时数据的时间间隔。单位：秒�
 
 sampling_rate（默认：【空】）：加速度数据的采样率。你可以在https://phyphox.org/sensordb/中选择你的设备，并查看“Acceleration (without g)”标签中的“Rate”。留空的话程序会自动测定。单位：Hz。
 
+csis_v（默认：true）：计算CSIS标准烈度时是否考虑PGV。
+
+jma_0.3（默认：true）：计算JMA标准烈度时是否采用持续0.3秒的PGA。
+
+max_range（默认：12000）：筛选过去采样中的最大PGA、PGV和烈度并在输出时将其显示的采样次数。如果采样率为100Hz，该项填写为12000即代表显示过去2分钟内的最大PGA、PGV和烈度。
+
 correction：
 
     auto_correction（默认：true）：自动基线校正。开启的话，程序会自动采集前{refresh_time}秒内的平均加速度作为校准值。类型：布尔值（true/false）。
