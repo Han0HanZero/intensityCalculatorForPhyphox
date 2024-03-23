@@ -4,6 +4,9 @@
   "retry_limit": 3,
   "refresh_time": 1,
   "sampling_rate": "",
+  "csis_v": true,
+  "jma_0.3": true,
+  "max_range": 12000,
   "correction": {
     "auto_correction": true,
     "x": 0.00,
