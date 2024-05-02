@@ -167,6 +167,9 @@ def save_processed_data(start_time, last_latest_time, processed_data: tuple, dat
     elif data_type == 'a':
         data_type = 'Linear Acceleration'
         unit = 'm/s^2'
+    elif data_type == 'd':
+        data_type = 'Displacement'
+        unit = 'm/s^2'
     try:  # 判断文件是否存在来决定是否添加表头
         open(f'./logs/{start_time}/Processed Data ({data_type}).csv', 'r')
     except FileNotFoundError:
@@ -182,7 +185,19 @@ def save_processed_data(start_time, last_latest_time, processed_data: tuple, dat
     last_latest_time = raw_data_t[-1]
     return last_latest_time, raw_data_t, data_x, data_y, data_z, data_a
 
-def main_process(choice, processed, sampling_rate, auto_correction, last_latest_vx, last_latest_vy, last_latest_vz, a_max, v_max, a_max_time, v_max_time, ia_csis, i_csis, ia_jma, i_jma, correction_x, correction_y, correction_z):
+def check_for_update(version):
+    try:
+        response = get('https://api.github.com/repos/Han0HanZero/PhyphoxAccelerationAnalyser/releases/latest')
+    except Exception as e:
+        print(f'最新版本信息获取失败，请手动检查更新：{e}')
+    else:
+        latest_version = response.json()['tag_name']
+        if version != latest_version:
+            print(f'有新版本（{latest_version}）！前往https://github.com/Han0HanZero/phyphoxAccelerationAnalyser/releases/latest或https://hanice.lanzouo.com/b01g0x7ra（密码:0721）下载。')
+        else:
+            print('当前是最新版本。')
+
+def main_process(choice, processed, sampling_rate, auto_correction, last_latest_vx, last_latest_vy, last_latest_vz, a_max, v_max, a_max_time, v_max_time, ia_csis, i_csis, ia_jma, i_jma, correction_x, correction_y, correction_z, last_latest_dx, last_latest_dy, last_latest_dz, d_max, d_max_time):
     if processed:
         with open(path + '/Processed Data (Linear Acceleration).csv', 'r') as data_file:  # 解析a数据
             data = csv.reader(data_file, delimiter=',')
@@ -203,6 +218,15 @@ def main_process(choice, processed, sampling_rate, auto_correction, last_latest_
                 vy.append(float(row[2]))
                 vz.append(float(row[3]))
                 va.append(float(row[4]))
+        with open(path + '/Processed Data (Displacement).csv', 'r') as data_file:  # 解析v数据
+            data = csv.reader(data_file, delimiter=',')
+            for row in data:
+                if row[0] == 'Time (s)':
+                    continue
+                dx.append(float(row[1]))
+                dy.append(float(row[2]))
+                dz.append(float(row[3]))
+                da.append(float(row[4]))
     else:
         # 测定采样率
         if not sampling_rate:
@@ -227,14 +251,20 @@ def main_process(choice, processed, sampling_rate, auto_correction, last_latest_
             corrected_ay.append(y)
             corrected_az.append(z)
 
-        # 转换为速度
+        # 转换为速度和位移
         corrected_vx = (np.cumsum(corrected_ax)) * (1 / sampling_rate) + last_latest_vx
         corrected_vy = (np.cumsum(corrected_ay)) * (1 / sampling_rate) + last_latest_vy
         corrected_vz = (np.cumsum(corrected_az)) * (1 / sampling_rate) + last_latest_vz
+        corrected_dx = (np.cumsum(corrected_vx)) * (1 / sampling_rate) + last_latest_dx
+        corrected_dy = (np.cumsum(corrected_vy)) * (1 / sampling_rate) + last_latest_dy
+        corrected_dz = (np.cumsum(corrected_vz)) * (1 / sampling_rate) + last_latest_dz
         if choice == '0':
             last_latest_vx = corrected_vx[-1]
             last_latest_vy = corrected_vy[-1]
             last_latest_vz = corrected_vz[-1]
+            last_latest_dx = corrected_dx[-1]
+            last_latest_dy = corrected_dy[-1]
+            last_latest_dz = corrected_dz[-1]
 
         # 对原三方向加速度和速度进行滤波
         # 加速度
@@ -252,6 +282,13 @@ def main_process(choice, processed, sampling_rate, auto_correction, last_latest_
         for row in filter_wave(x=corrected_vz):
             vz.append(row)
 
+        for row in filter_wave(x=corrected_dx):
+            dx.append(row)
+        for row in filter_wave(x=corrected_dy):
+            dy.append(row)
+        for row in filter_wave(x=corrected_dz):
+            dz.append(row)
+
         # 合成滤波后加速度
         # print('正在合成')
         for x, y, z in zip(ax, ay, az):
@@ -259,11 +296,15 @@ def main_process(choice, processed, sampling_rate, auto_correction, last_latest_
         # 速度
         for x, y, z in zip(vx, vy, vz):
             va.append(sqrt(x ** 2 + y ** 2 + z ** 2))
+        # 位移
+        for x, y, z in zip(dx, dy, dz):
+            da.append(sqrt(x ** 2 + y ** 2 + z ** 2))
 
         if choice == '0':
             # 存储处理后数据
             save_processed_data(start_time, last_latest_time, (raw_data_t, ax, ay, az, aa), 'a')
             save_processed_data(start_time, last_latest_time, (raw_data_t, vx, vy, vz, va), 'v')
+            save_processed_data(start_time, last_latest_time, (raw_data_t, dx, dy, dz, da), 'd')
 
     # 计算PGA
     # print('正在筛选PGA')
@@ -276,6 +317,11 @@ def main_process(choice, processed, sampling_rate, auto_correction, last_latest_
     if rt_v_max > v_max:
         v_max = rt_v_max
         v_max_time = round(raw_data_t[va.index(v_max)], 2)
+    # PGD
+    rt_d_max = max(da)
+    if rt_d_max > d_max:
+        d_max = rt_d_max
+        d_max_time = round(raw_data_t[da.index(d_max)], 2)
 
     # 计算烈度
     rt_ia_csis, rt_i_csis = csis_calc(rt_a_max, rt_v_max,csis_v)
@@ -285,7 +331,7 @@ def main_process(choice, processed, sampling_rate, auto_correction, last_latest_
     ia_jma = max(ia_jma, rt_ia_jma)
     i_jma = max(i_jma, rt_i_jma)
 
-    return sampling_rate, auto_correction, last_latest_vx, last_latest_vy, last_latest_vz, last_latest_time, a_max, v_max, ia_csis, i_csis, ia_jma, i_jma, rt_a_max, rt_v_max, rt_ia_csis, rt_i_csis, rt_ia_jma, rt_i_jma, a_max_time, v_max_time
+    return sampling_rate, auto_correction, last_latest_vx, last_latest_vy, last_latest_vz, last_latest_time, a_max, v_max, ia_csis, i_csis, ia_jma, i_jma, rt_a_max, rt_v_max, rt_ia_csis, rt_i_csis, rt_ia_jma, rt_i_jma, a_max_time, v_max_time, last_latest_dx, last_latest_dy, last_latest_dz, d_max, rt_d_max, d_max_time
 
 
 if __name__ == '__main__':
@@ -299,10 +345,13 @@ if __name__ == '__main__':
     ia_jma, i_jma = -3.0, 0
     a_max = 0
     v_max = 0
+    d_max = 0
     rt_a_max = 0
     rt_v_max = 0
+    rt_d_max = 0
     a_max_time = 0
     v_max_time = 0
+    d_max_time = 0
     last_latest_time = 0
     is_recording = False
     config = get_config()
@@ -321,11 +370,17 @@ if __name__ == '__main__':
     last_latest_vx = 0
     last_latest_vy = 0
     last_latest_vz = 0
+    last_latest_dx = 0
+    last_latest_dy = 0
+    last_latest_dz = 0
 
     init_folders()
 
-    print('Phyphox Acceleration Analyser v2.1.0\nby HanZero\n')
-    print('输入序号进入相应模式：\n0 - 实时监控\n1 - 数据分析\n')
+    version = 'v2.1.1-alpha.1'
+
+    print(f'Intensity Calculator for Phyphox {version}\nby HanZero')
+    check_for_update(version)
+    print('\n输入序号进入相应模式：\n0 - 实时监控\n1 - 数据分析\n')
     choice = input('>>> ')
     if choice == '0':
         # 请求IP
@@ -369,6 +424,10 @@ if __name__ == '__main__':
             vy = []
             vz = []
             va = []
+            dx = []  # 滤波后位移
+            dy = []
+            dz = []
+            da = []
             #print(analyse_raw_data(start_time,0,ip))
 
             # 原始数据获取
@@ -396,15 +455,17 @@ if __name__ == '__main__':
                 print('实验停止了？记录已终止。\n----------')
                 break
 
-            sampling_rate, auto_correction, last_latest_vx, last_latest_vy, last_latest_vz, last_latest_time, a_max, v_max, ia_csis, i_csis, ia_jma, i_jma, rt_a_max, rt_v_max, rt_ia_csis, rt_i_csis, rt_ia_jma, rt_i_jma, a_max_time, v_max_time = main_process(choice, False, sampling_rate, auto_correction, last_latest_vx, last_latest_vy, last_latest_vz, a_max, v_max, a_max_time, v_max_time, ia_csis, i_csis, ia_jma, i_jma, correction_x, correction_y, correction_z)
+            sampling_rate, auto_correction, last_latest_vx, last_latest_vy, last_latest_vz, last_latest_time, a_max, v_max, ia_csis, i_csis, ia_jma, i_jma, rt_a_max, rt_v_max, rt_ia_csis, rt_i_csis, rt_ia_jma, rt_i_jma, a_max_time, v_max_time, last_latest_dx, last_latest_dy, last_latest_dz, d_max, rt_d_max, d_max_time = main_process(choice, False, sampling_rate, auto_correction, last_latest_vx, last_latest_vy, last_latest_vz, a_max, v_max, a_max_time, v_max_time, ia_csis, i_csis, ia_jma, i_jma, correction_x, correction_y, correction_z, last_latest_dx, last_latest_dy, last_latest_dz, d_max, d_max_time)
 
             # 结果输出
             print(strftime('/// %Y-%m-%d %H:%M:%S', gmtime()) + ' (UTC) ///')
             print(f'实时PGA：{round(rt_a_max,4)} m/s²')
             print(f'实时PGV：{round(rt_v_max,4)} m/s')
+            print(f'实时PGD：{round(rt_d_max, 4)} m')
             print(f'实时烈度：\nCSIS: {rt_ia_csis} ({rt_i_csis})\nJMA: {rt_ia_jma} ({format_i_jma(rt_i_jma)})')
             print(f'本次记录最大PGA：{round(a_max,4)} m/s²（{a_max_time}s时刻）')
             print(f'本次记录最大PGV：{round(v_max,4)} m/s（{v_max_time}s时刻）')
+            print(f'本次记录最大PGD：{round(d_max, 4)} m（{d_max_time}s时刻）')
             print(f'本次记录最大烈度：\nCSIS: {ia_csis} ({i_csis})\nJMA: {ia_jma} ({format_i_jma(i_jma)})')
             print('----------')
             # TODO: 完成-处理实验手动停止/连接断开时的应对方法（跳出循环开始统计）
@@ -428,6 +489,10 @@ if __name__ == '__main__':
         vy = []
         vz = []
         va = []
+        dx = []  # 滤波后位移
+        dy = []
+        dz = []
+        da = []
 
         path = input('----------\n请输入记录文件夹路径：').removeprefix('"').removesuffix('"').removesuffix('/').removesuffix(sep)
 
@@ -438,6 +503,7 @@ if __name__ == '__main__':
 
         try:
             open(path+'/Processed Data (Velocity).csv')
+            open(path + '/Processed Data (Displacement).csv')
         except FileNotFoundError:
             print('----------\n这个文件夹中只有原始数据，因此将开始从头分析。\n----------')
             processed = False
@@ -457,12 +523,13 @@ if __name__ == '__main__':
                     raw_data_z.append(float(row[3]))
                     raw_data_a.append(float(row[4]))
 
-        sampling_rate, auto_correction, last_latest_vx, last_latest_vy, last_latest_vz, last_latest_time, a_max, v_max, ia_csis, i_csis, ia_jma, i_jma, rt_a_max, rt_v_max, rt_ia_csis, rt_i_csis, rt_ia_jma, rt_i_jma, a_max_time, v_max_time = main_process(choice, processed, sampling_rate, auto_correction, last_latest_vx, last_latest_vy, last_latest_vz, a_max, v_max, a_max_time, v_max_time, ia_csis, i_csis, ia_jma, i_jma, correction_x, correction_y, correction_z)
+        sampling_rate, auto_correction, last_latest_vx, last_latest_vy, last_latest_vz, last_latest_time, a_max, v_max, ia_csis, i_csis, ia_jma, i_jma, rt_a_max, rt_v_max, rt_ia_csis, rt_i_csis, rt_ia_jma, rt_i_jma, a_max_time, v_max_time, last_latest_dx, last_latest_dy, last_latest_dz, d_max, rt_d_max, d_max_time = main_process(choice, processed, sampling_rate, auto_correction, last_latest_vx, last_latest_vy, last_latest_vz, a_max, v_max, a_max_time, v_max_time, ia_csis, i_csis, ia_jma, i_jma, correction_x, correction_y, correction_z, last_latest_dx, last_latest_dy, last_latest_dz, d_max, d_max_time)
 
         # 打印结果
         print(strftime('/// %Y-%m-%d %H:%M:%S', gmtime()) + ' (UTC) 产出结果 ///')
         print(f'本次记录最大PGA：{a_max} m/s²（{a_max_time}s时刻）')
         print(f'本次记录最大PGV：{v_max} m/s（{v_max_time}s时刻）')
+        print(f'本次记录最大PGD：{d_max} m（{d_max_time}s时刻）')
         print(f'本次记录最大烈度：\nCSIS: {ia_csis} ({i_csis})\nJMA: {ia_jma} ({format_i_jma(i_jma)})')
         print('----------')
 
