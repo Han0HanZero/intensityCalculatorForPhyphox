@@ -1,6 +1,6 @@
-# phyphoxAccelerationAnalyser
+# Intensity Calculator for Phyphox
 
-源代码以MIT协议分发。
+许可证：MIT License
 
 ---
 
