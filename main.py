@@ -108,15 +108,16 @@ def csis_calc(a,v,csis_v):
         ii = ia
     ii = round(ii,1)
     if ii < 1.0:
-        ii = 1.0
+        i = 1
     elif ii > 12.0:
-        ii = 12.0
-    i = round(ii)
+        i = 12
+    else:
+        i = round(ii)
     return ii,i
 
 
 def jma_calc(a):
-    ia = 2 * log10(a) + 4.94
+    ia = 2 * log10(100*a) + 0.94
     ia = round(ia,2)
     ia = int(ia*10)/10
     if ia <= 0.4:
@@ -132,7 +133,7 @@ def jma_calc(a):
     elif ia <= 4.9:
         i = 5  # 5弱。最大震度筛选需要大小比较，于是用5代替。
     elif ia <= 5.4:
-        i = 5.5  # 5强。最大震度筛选需要大小比较，于是用5代替。下同
+        i = 5.5  # 5强。最大震度筛选需要大小比较，于是用5.5代替。下同
     elif ia <= 5.9:
         i = 6
     elif ia <= 6.4:
@@ -187,11 +188,11 @@ def save_processed_data(start_time, last_latest_time, processed_data: tuple, dat
 
 def check_for_update(version):
     try:
-        response = get('https://api.github.com/repos/Han0HanZero/PhyphoxAccelerationAnalyser/releases/latest')
+        response = get('https://api.github.com/repos/Han0HanZero/PhyphoxAccelerationAnalyser/releases')
     except Exception as e:
         print(f'最新版本信息获取失败，请手动检查更新：{e}')
     else:
-        latest_version = response.json()['tag_name']
+        latest_version = response.json()[0]['tag_name']
         if version != latest_version:
             print(f'有新版本（{latest_version}）！前往https://github.com/Han0HanZero/phyphoxAccelerationAnalyser/releases/latest或https://hanice.lanzouo.com/b01g0x7ra（密码:0721）下载。')
         else:
@@ -218,7 +219,7 @@ def main_process(choice, processed, sampling_rate, auto_correction, last_latest_
                 vy.append(float(row[2]))
                 vz.append(float(row[3]))
                 va.append(float(row[4]))
-        with open(path + '/Processed Data (Displacement).csv', 'r') as data_file:  # 解析v数据
+        with open(path + '/Processed Data (Displacement).csv', 'r') as data_file:  # 解析d数据
             data = csv.reader(data_file, delimiter=',')
             for row in data:
                 if row[0] == 'Time (s)':
@@ -255,9 +256,9 @@ def main_process(choice, processed, sampling_rate, auto_correction, last_latest_
         corrected_vx = (np.cumsum(corrected_ax)) * (1 / sampling_rate) + last_latest_vx
         corrected_vy = (np.cumsum(corrected_ay)) * (1 / sampling_rate) + last_latest_vy
         corrected_vz = (np.cumsum(corrected_az)) * (1 / sampling_rate) + last_latest_vz
-        corrected_dx = (np.cumsum(corrected_vx)) * (1 / sampling_rate) + last_latest_dx
-        corrected_dy = (np.cumsum(corrected_vy)) * (1 / sampling_rate) + last_latest_dy
-        corrected_dz = (np.cumsum(corrected_vz)) * (1 / sampling_rate) + last_latest_dz
+        corrected_dx = (np.cumsum(list(corrected_vx))) * (1 / sampling_rate) + last_latest_dx
+        corrected_dy = (np.cumsum(list(corrected_vy))) * (1 / sampling_rate) + last_latest_dy
+        corrected_dz = (np.cumsum(list(corrected_vz))) * (1 / sampling_rate) + last_latest_dz
         if choice == '0':
             last_latest_vx = corrected_vx[-1]
             last_latest_vy = corrected_vy[-1]
@@ -281,14 +282,18 @@ def main_process(choice, processed, sampling_rate, auto_correction, last_latest_
             vy.append(row)
         for row in filter_wave(x=corrected_vz):
             vz.append(row)
-
+        # 位移
         for row in filter_wave(x=corrected_dx):
             dx.append(row)
         for row in filter_wave(x=corrected_dy):
             dy.append(row)
         for row in filter_wave(x=corrected_dz):
             dz.append(row)
-
+        '''
+        dx = corrected_dx
+        dy = corrected_dy
+        dz = corrected_dz
+        '''
         # 合成滤波后加速度
         # print('正在合成')
         for x, y, z in zip(ax, ay, az):
@@ -363,6 +368,7 @@ if __name__ == '__main__':
     csis_v = config['csis_v']
     jma_03 = config['jma_0.3']
     max_range = config['max_range']
+    enable_pgd = config['enable_pgd']
     auto_correction = config['correction']['auto_correction']
     correction_x = config['correction']['x']
     correction_y = config['correction']['y']
@@ -376,7 +382,7 @@ if __name__ == '__main__':
 
     init_folders()
 
-    version = 'v2.1.1-alpha.1'
+    version = 'v2.1.1-alpha.2'
 
     print(f'Intensity Calculator for Phyphox {version}\nby HanZero')
     check_for_update(version)
@@ -397,7 +403,7 @@ if __name__ == '__main__':
 
         # 开始实验
         print('----------')
-        print(f'参数预览：\nIP地址：{ip}\n重试限制：{retry_limit}\n刷新间隔：{refresh_time} s\n采样率：{sampling_rate} Hz\n计算CSIS标准烈度时参考PGV：{csis_v}\n计算JMA标准烈度时使用持续最大0.3秒的PGA：{jma_03}\n“最近”最大PGA、PGV和烈度指代的时间长度：过去{max_range}次采样\n基线校正(x,y,z)：{correction_x},{correction_y},{correction_z}')
+        print(f'参数预览：\nIP地址：{ip}\n重试限制：{retry_limit}\n刷新间隔：{refresh_time} s\n采样率：{sampling_rate} Hz\n计算CSIS标准烈度时参考PGV：{csis_v}\n计算JMA标准烈度时使用持续最大0.3秒的PGA（暂未使用）：{jma_03}\n“最近”最大PGA、PGV和烈度指代的时间间隔（暂未使用）：过去{max_range}次采样\n显示PGD（实验性）：{enable_pgd}\n加速度基线校正(x,y,z)：{correction_x}m/s²,{correction_y}m/s²,{correction_z}m/s²')
         print(f'实验将在{config["delay"]}秒后自动开始，您不需在app上设置启动延迟...')
         print('----------')
         sleep(config['delay'])
@@ -461,11 +467,13 @@ if __name__ == '__main__':
             print(strftime('/// %Y-%m-%d %H:%M:%S', gmtime()) + ' (UTC) ///')
             print(f'实时PGA：{round(rt_a_max,4)} m/s²')
             print(f'实时PGV：{round(rt_v_max,4)} m/s')
-            print(f'实时PGD：{round(rt_d_max, 4)} m')
+            if enable_pgd:
+                print(f'实时PGD：{round(rt_d_max, 4)} m')
             print(f'实时烈度：\nCSIS: {rt_ia_csis} ({rt_i_csis})\nJMA: {rt_ia_jma} ({format_i_jma(rt_i_jma)})')
             print(f'本次记录最大PGA：{round(a_max,4)} m/s²（{a_max_time}s时刻）')
             print(f'本次记录最大PGV：{round(v_max,4)} m/s（{v_max_time}s时刻）')
-            print(f'本次记录最大PGD：{round(d_max, 4)} m（{d_max_time}s时刻）')
+            if enable_pgd:
+                print(f'本次记录最大PGD：{round(d_max, 4)} m（{d_max_time}s时刻）')
             print(f'本次记录最大烈度：\nCSIS: {ia_csis} ({i_csis})\nJMA: {ia_jma} ({format_i_jma(i_jma)})')
             print('----------')
             # TODO: 完成-处理实验手动停止/连接断开时的应对方法（跳出循环开始统计）
@@ -529,7 +537,8 @@ if __name__ == '__main__':
         print(strftime('/// %Y-%m-%d %H:%M:%S', gmtime()) + ' (UTC) 产出结果 ///')
         print(f'本次记录最大PGA：{a_max} m/s²（{a_max_time}s时刻）')
         print(f'本次记录最大PGV：{v_max} m/s（{v_max_time}s时刻）')
-        print(f'本次记录最大PGD：{d_max} m（{d_max_time}s时刻）')
+        if enable_pgd:
+            print(f'本次记录最大PGD：{d_max} m（{d_max_time}s时刻）')
         print(f'本次记录最大烈度：\nCSIS: {ia_csis} ({i_csis})\nJMA: {ia_jma} ({format_i_jma(i_jma)})')
         print('----------')
 
