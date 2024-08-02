@@ -1,3 +1,14 @@
+2.1.1-alpha.2 - 2024.8.3
+- 更正JMA标准震度计算公式
+- 现在可以关闭PGD显示了
+- 新增requirements.txt
+注：该版本仅提供源代码
+
+2.1.1-alpha.1 - 2024.5.2
+- 为防止可能的误解，由Phyphox Acceleration Analyser更名为Intensity Calculator for Phyphox
+- 新增PGD显示（疑似存在bug）
+- 新增更新检查功能（测试）
+
 2.1.0 - 2024.3.23
 - 优化代码结构
 - 修复了数据分析模式下PGV计算依然有巨大误差的bug
